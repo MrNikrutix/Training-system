@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { ContentLayout } from "@/components/admin-panel/content-layout";
 import { useState, useEffect } from "react"
 import { AlertDialog, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog"
-
+import Link from 'next/link';
 async function getExercises() {
   try {
     const data = await fetch("http://localhost:8000/api/exercises", {
@@ -64,20 +64,22 @@ export default function Home() {
 
   if (!exercises || exercises.length === 0) {
     return (
-      <div className="container mx-auto py-10">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Ćwiczenia</h1>
-          <Button className="flex items-center gap-2" asChild>
-            <a href="/exercises/new">
-              <Plus className="h-4 w-4" />
-              Utwórz nowe
-            </a>
-          </Button>
+      <ContentLayout title="Lista ćwiczeń">
+        <div className="container mx-auto py-10">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Ćwiczenia</h1>
+            <Button className="flex items-center gap-2" asChild>
+              <Link href="/exercises/new">
+                <Plus className="h-4 w-4" />
+                Utwórz nowe
+              </Link>
+            </Button>
+          </div>
+          <div className="text-center py-10">
+            <p className="text-muted-foreground">Brak ćwiczeń. Utwórz nowe ćwiczenie, aby rozpocząć.</p>
+          </div>
         </div>
-        <div className="text-center py-10">
-          <p className="text-muted-foreground">Brak ćwiczeń. Utwórz nowe ćwiczenie, aby rozpocząć.</p>
-        </div>
-      </div>
+      </ContentLayout>
     )
   }
 
@@ -86,10 +88,10 @@ export default function Home() {
       <div className="container mx-auto py-10">
         <div className="flex justify-between items-center mb-6">
           <Button className="flex items-center gap-2" asChild>
-            <a href="/exercises/new">
+            <Link href="/exercises/new">
               <Plus className="h-4 w-4" />
               Utwórz nowe
-            </a>
+            </Link>
           </Button>
         </div>
 

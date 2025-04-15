@@ -78,7 +78,7 @@ function flattenActivities(workout: Workout): WorkoutActivity[] {
       for (let set = 1; set <= exercise.sets; set++) {
         // Dodaj ćwiczenie
         activities.push({
-          id: `exercise-${exercise.ex_id}-set-${set}`,
+          id: `exercise-${section.id || section.position}-${exercise.ex_id}-set-${set}`,
           type: "exercise",
           name: exercise.name || `Ćwiczenie ${exercise.ex_id}`,
           duration: exercise.unit === "CZAS" ? exercise.duration : null,
@@ -94,7 +94,7 @@ function flattenActivities(workout: Workout): WorkoutActivity[] {
         // Dodaj odpoczynek po ćwiczeniu (oprócz ostatniej serii)
         if (set < exercise.sets || exercise !== section.exercises[section.exercises.length - 1]) {
           activities.push({
-            id: `rest-${exercise.ex_id}-set-${set}`,
+            id: `rest-${section.id || section.position}-${exercise.ex_id}-set-${set}`,
             type: "rest",
             name: "Odpoczynek",
             duration: exercise.rest,
@@ -746,7 +746,7 @@ function WorkoutSetTable({ activities, currentActivityIndex, onSetCurrentActivit
           <tbody>
             {activities.map((activity, index) => (
               <tr
-                key={`${activity.id}-${activity.currentSet}`}
+                key={`${activity.id}-${index}`}
                 className={`border-b border-white/10 cursor-pointer transition duration-300 ${
                   index === currentActivityIndex ? "bg-white/20" : "hover:bg-white/5"
                 }`}

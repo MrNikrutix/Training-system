@@ -45,12 +45,6 @@ export function getMenuList(pathname: string): Group[] {
           submenus: []
         },
         {
-          href: "/kalendarz",
-          label: "Kalendarz",
-          icon: Calendar,
-          submenus: []
-        },
-        {
           href: "/analyser",
           label: "Wideo analizator",
           icon: Video,

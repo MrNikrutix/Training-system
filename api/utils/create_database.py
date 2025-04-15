@@ -1,5 +1,5 @@
 import mysql.connector
-from sqlalchemy import create_engine, Enum, MetaData, Table, Column, Integer, String, Boolean, ForeignKey, Date, Text, TIMESTAMP
+from sqlalchemy import create_engine, Enum, MetaData, Table, Column, Integer, String, Boolean, ForeignKey, Date, Text, Time
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import inspect
@@ -46,6 +46,7 @@ class Exercise(Base):
     crop_id = Column(Integer, nullable=True)
     
     tags = relationship("Tag", secondary="exercise_tags", back_populates="exercises")
+    cropped_videos = relationship("CroppedVideo", back_populates="exercise")
 
 class Tag(Base):
     __tablename__ = "tags"
@@ -190,6 +191,40 @@ class WorkoutPlan(Base):
     week = relationship("WeekPlan", back_populates="workouts")
     workout = relationship("Workout", back_populates="workout_plans")
 
+class Analyser(Base):
+    __tablename__ = "analyser"
+
+    id = Column(Integer, primary_key=True, index=True)
+    video_url = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
+    
+    annotations = relationship("AnnotationAnalyser", back_populates="analyser")
+
+class AnnotationAnalyser(Base):
+    __tablename__ = "annotation_analyser"
+
+    id = Column(Integer, primary_key=True, index=True)
+    analyser_id = Column(Integer, ForeignKey("analyser.id"), nullable=False)
+    time_from = Column(Time, nullable=False)
+    time_to = Column(Time, nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(String(255), nullable=True)
+    color = Column(String(50), nullable=False)
+    saved = Column(Boolean, nullable=False, default=False)
+    
+    analyser = relationship("Analyser", back_populates="annotations")
+    cropped_videos = relationship("CroppedVideo", back_populates="annotation")
+
+class CroppedVideo(Base):
+    __tablename__ = "cropped_video"
+
+    id = Column(Integer, primary_key=True, index=True)
+    anno_id = Column(Integer, ForeignKey("annotation_analyser.id"), nullable=False)
+    video_url = Column(String(255), nullable=False)
+    crop_id = Column(Integer, ForeignKey("exercises.id"), nullable=False)
+    
+    annotation = relationship("AnnotationAnalyser", back_populates="cropped_videos")
+
 def create_tables(username, password, host):
     # Utwórz bazę danych jeśli nie istnieje
     create_database(username, password, host)
@@ -214,76 +249,6 @@ def create_tables(username, password, host):
     except Exception as e:
         print(f"Błąd podczas tworzenia tabel: {e}")
 
-def update_database(username, password, host, only_new_tables=False):
-    """
-    Aktualizuje bazę danych dodając tylko nowe tabele bez usuwania istniejących
-    """
-    # Utwórz bazę danych jeśli nie istnieje
-    create_database(username, password, host)
-    
-    # Utwórz połączenie do bazy danych
-    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{username}:{password}@{host}/trainhub"
-    print(f"Próba połączenia z bazą danych: mysql+pymysql://{username}:********@{host}/trainhub")
-    
-    engine = create_engine(SQLALCHEMY_DATABASE_URL)
-    
-    if only_new_tables:
-        try:
-            # Sprawdzamy jakie tabele już istnieją
-            inspector = inspect(engine)
-            existing_tables = inspector.get_table_names()
-            print(f"Istniejące tabele: {', '.join(existing_tables)}")
-            
-            # Tworzenie tylko nowych tabel w odpowiedniej kolejności
-            metadata = MetaData()
-            
-            # Najpierw sprawdzamy, czy istnieje tabela 'workouts'
-            if 'workouts' not in existing_tables:
-                print("UWAGA: Tabela 'workouts' nie istnieje, należy najpierw utworzyć podstawowe tabele!")
-                return
-            
-            # Tworzymy tabele w odpowiedniej kolejności z uwzględnieniem zależności
-            tables_to_create = []
-            
-            if 'plan' not in existing_tables:
-                tables_to_create.append('plan')
-            
-            if 'week_plan' not in existing_tables and 'plan' in existing_tables:
-                tables_to_create.append('week_plan')
-            
-            if 'workout_plan' not in existing_tables and 'week_plan' in existing_tables and 'workouts' in existing_tables:
-                tables_to_create.append('workout_plan')
-            
-            if not tables_to_create:
-                print("Wszystkie tabele już istnieją w bazie danych.")
-                return
-            
-            print(f"Tabele do utworzenia: {', '.join(tables_to_create)}")
-            
-            # Tworzymy tabele jedna po drugiej w odpowiedniej kolejności
-            if 'plan' in tables_to_create:
-                Base.metadata.tables['plan'].create(engine)
-                print("Utworzono tabelę 'plan'")
-            
-            if 'week_plan' in tables_to_create:
-                Base.metadata.tables['week_plan'].create(engine)
-                print("Utworzono tabelę 'week_plan'")
-            
-            if 'workout_plan' in tables_to_create:
-                Base.metadata.tables['workout_plan'].create(engine)
-                print("Utworzono tabelę 'workout_plan'")
-            
-            print(f"Utworzono {len(tables_to_create)} nowych tabel w bazie danych.")
-            
-        except Exception as e:
-            print(f"Błąd podczas aktualizacji bazy danych: {e}")
-    else:
-        try:
-            # Tworzymy wszystkie tabele, SQLAlchemy automatycznie pominie istniejące
-            Base.metadata.create_all(engine)
-            print("Zaktualizowano bazę danych - dodano brakujące tabele.")
-        except Exception as e:
-            print(f"Błąd podczas aktualizacji bazy danych: {e}")
 
 if __name__ == "__main__":
     # Podaj dane do połączenia MySQL
@@ -299,13 +264,6 @@ if __name__ == "__main__":
             exit()
     
     host = input("Podaj host MySQL (domyślnie localhost): ") or "localhost"
+
+    create_tables(username, password, host)
     
-    # Pytanie o tryb aktualizacji
-    mode = input("Wybierz tryb: [1] Pełne utworzenie bazy (usuwa istniejące tabele) [2] Tylko dodanie nowych tabel: ")
-    
-    if mode == "1":
-        # Utwórz bazę danych i tabele od nowa
-        create_tables(username, password, host)
-    else:
-        # Dodaj tylko nowe tabele
-        update_database(username, password, host, only_new_tables=True)

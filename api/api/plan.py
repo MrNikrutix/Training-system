@@ -213,6 +213,17 @@ def update_workout_plan(workout_id: int, workout: WorkoutPlanUpdate, db: Session
         if not db_workout:
             raise HTTPException(status_code=404, detail="Workout plan not found")
         
+            # --- POCZĄTEK ZMIAN ---
+        if workout.week_id is not None:
+            # Opcjonalnie: Sprawdź, czy docelowy tydzień istnieje i należy do tego samego planu
+            target_week = db.query(WeekPlan).filter(WeekPlan.id == workout.week_id).first()
+            if not target_week:
+                raise HTTPException(status_code=404, detail=f"Target week with id {workout.week_id} not found")
+            if target_week.plan_id != db_workout.plan_id:
+                 raise HTTPException(status_code=400, detail="Cannot move workout to a week in a different plan")
+            db_workout.week_id = workout.week_id # Aktualizuj week_id
+         # --- KONIEC ZMIAN ---
+        
         # Update workout data
         if workout.name is not None:
             db_workout.name = workout.name

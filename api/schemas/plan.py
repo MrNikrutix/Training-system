@@ -27,6 +27,7 @@ class WorkoutPlanCreate(WorkoutPlanBase):
     week_id: int
 
 class WorkoutPlanUpdate(BaseModel):
+    week_id: Optional[int] = None
     name: Optional[str] = None
     description: Optional[str] = None
     day_of_week: Optional[DayOfWeek] = None
