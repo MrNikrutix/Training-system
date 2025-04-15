@@ -28,8 +28,22 @@ export function ExerciseForm({ initialData, onSubmit, submitLabel, isLoading = f
     instructions: "",
     enrichment: "",
     videoUrl: "",
-    tag_ids: [],
+    tag_ids: [], // Initialize as an empty array
   })
+  
+  // Log initial form data and clean up any undefined tag IDs
+  useEffect(() => {
+    console.log("Initial form data:", formData);
+    
+    // Clean up any undefined tag IDs that might be in the initial form data
+    if (formData.tag_ids.some(id => id === undefined)) {
+      console.log("Found undefined tag IDs in initial form data, cleaning up...");
+      setFormData(prev => ({
+        ...prev,
+        tag_ids: prev.tag_ids.filter(id => id !== undefined)
+      }));
+    }
+  }, [])
   const [tags, setTags] = useState<Tag[]>([])
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState("")
@@ -47,16 +61,27 @@ export function ExerciseForm({ initialData, onSubmit, submitLabel, isLoading = f
 
         // If we have initial data (editing mode), populate the form
         if (initialData) {
-          setFormData({
+          console.log("Initializing form with data:", initialData);
+          
+          // Ensure tag_ids is an array
+          const tagIds = initialData.tags?.map((tag) => tag.id) || [];
+          console.log("Extracted tag IDs:", tagIds);
+          
+          const formDataToSet = {
             name: initialData.name || "",
             instructions: initialData.instructions || "",
             enrichment: initialData.enrichment || "",
             videoUrl: initialData.videoUrl || "",
-            tag_ids: initialData.tags?.map((tag) => tag.id) || [],
-          })
+            tag_ids: tagIds,
+          };
+          
+          console.log("Setting form data:", formDataToSet);
+          setFormData(formDataToSet);
 
           // Set selected tags based on the exercise's tags
-          setSelectedTags(initialData.tags || [])
+          const tagsToSet = initialData.tags || [];
+          console.log("Setting selected tags:", tagsToSet);
+          setSelectedTags(tagsToSet);
         }
       } catch (error) {
         console.error("Error loading form data:", error)
@@ -94,18 +119,54 @@ export function ExerciseForm({ initialData, onSubmit, submitLabel, isLoading = f
 
       // If tag doesn't exist, create it
       if (!tagToAdd) {
-        tagToAdd = await createTag(newTagName.trim())
-        // Add the new tag to the available tags list
-        setTags((prevTags) => [...prevTags, tagToAdd])
+        try {
+          tagToAdd = await createTag(newTagName.trim())
+          console.log("Created new tag:", tagToAdd);
+          
+          // Add the new tag to the available tags list
+          setTags((prevTags) => [...prevTags, tagToAdd])
+        } catch (createError) {
+          console.error("Error creating tag:", createError);
+          setError("Nie udało się utworzyć nowego tagu. Spróbuj ponownie.");
+          return;
+        }
       }
 
-      // Check if tag is already selected
-      if (!selectedTags.some((tag) => tag.id === tagToAdd.id)) {
-        setSelectedTags((prev) => [...prev, tagToAdd])
-        setFormData((prev) => ({
-          ...prev,
-          tag_ids: [...prev.tag_ids, tagToAdd.id],
-        }))
+      // Ensure the tag has a valid ID before adding it
+      if (tagToAdd && typeof tagToAdd.id === 'number') {
+        // Check if tag is already selected
+        if (!selectedTags.some((tag) => tag.id === tagToAdd.id)) {
+          // Create a new array with the updated selected tags
+          const newSelectedTags = [...selectedTags, tagToAdd];
+          setSelectedTags(newSelectedTags);
+          
+          // Create a new array with the updated tag IDs
+          const newTagIds = [...formData.tag_ids.filter(id => id !== undefined), tagToAdd.id];
+          
+          // Update the form data with the new tag IDs
+          setFormData({
+            ...formData,
+            tag_ids: newTagIds,
+          });
+          
+          // Log for debugging
+          console.log("Added tag:", tagToAdd);
+          console.log("Updated selected tags:", newSelectedTags);
+          console.log("Updated tag_ids:", newTagIds);
+        } else {
+          console.log("Tag already selected:", tagToAdd);
+        }
+      } else {
+        console.error("Invalid tag object or missing ID:", tagToAdd);
+        setError("Nie udało się dodać tagu - brak poprawnego ID.");
+        
+        // Refresh the tags list to ensure we have the latest data
+        try {
+          const refreshedTags = await getAllTags();
+          setTags(refreshedTags);
+        } catch (refreshError) {
+          console.error("Error refreshing tags:", refreshError);
+        }
       }
 
       // Clear the input
@@ -117,16 +178,29 @@ export function ExerciseForm({ initialData, onSubmit, submitLabel, isLoading = f
   }
 
   const handleTagRemove = (tagId: number) => {
+    if (tagId === undefined) {
+      console.error("Attempted to remove tag with undefined ID");
+      return;
+    }
+    
     // Create new arrays to avoid reference issues
-    const updatedSelectedTags = selectedTags.filter((tag) => tag.id !== tagId)
-    const updatedTagIds = formData.tag_ids.filter((id) => id !== tagId)
+    const updatedSelectedTags = selectedTags.filter((tag) => tag.id !== tagId);
+    
+    // Filter out undefined values and the tag ID to be removed
+    const updatedTagIds = formData.tag_ids
+      .filter(id => id !== undefined && id !== tagId);
 
     // Set both states with the new arrays
-    setSelectedTags(updatedSelectedTags)
+    setSelectedTags(updatedSelectedTags);
     setFormData({
       ...formData,
       tag_ids: updatedTagIds,
-    })
+    });
+    
+    // Log for debugging
+    console.log("Removed tag ID:", tagId);
+    console.log("Updated selected tags:", updatedSelectedTags);
+    console.log("Updated tag_ids:", updatedTagIds);
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,6 +214,11 @@ export function ExerciseForm({ initialData, onSubmit, submitLabel, isLoading = f
         throw new Error("Nazwa ćwiczenia jest wymagana")
       }
 
+      // Log the form data being sent to the API
+      console.log("Submitting form data:", formData);
+      console.log("Selected tags:", selectedTags);
+      console.log("Tag IDs being sent:", formData.tag_ids);
+
       // Submit the form data
       const result = await onSubmit(formData)
 
@@ -147,7 +226,28 @@ export function ExerciseForm({ initialData, onSubmit, submitLabel, isLoading = f
       router.push(`/exercises/${result.id}`)
     } catch (error) {
       console.error("Błąd podczas zapisywania ćwiczenia:", error)
-      setError(error instanceof Error ? error.message : "Wystąpił nieznany błąd")
+      
+      // Improved error handling to display more user-friendly messages
+      if (error instanceof Error) {
+        // Check if the error message is a JSON string (sometimes happens with API errors)
+        try {
+          const parsedError = JSON.parse(error.message);
+          if (typeof parsedError === 'object' && parsedError !== null) {
+            // Format the error object into a readable message
+            const errorMessages = Object.entries(parsedError)
+              .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+              .join('; ');
+            setError(errorMessages);
+          } else {
+            setError(error.message);
+          }
+        } catch {
+          // If it's not a JSON string, just use the error message directly
+          setError(error.message);
+        }
+      } else {
+        setError("Wystąpił nieznany błąd");
+      }
     } finally {
       setIsSaving(false)
     }
