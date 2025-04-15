@@ -1,69 +1,118 @@
 "use client"
-
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { use } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Pencil } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ContentLayout } from "@/components/admin-panel/content-layout";
 
 interface Exercise {
-  id: number
+  id: string
   name: string
-  instructions: string | null
-  enrichment: string | null
-  videoUrl: string | null
+  description: string
+  videoUrl: string
   tags: { name: string }[]
 }
 
-export default function ExerciseDetails() {
-  const params = useParams()
+const fetchExercise = async (id: string) => {
+  try {
+    const response = await fetch(`http://localhost:8000/api/exercises/${id}`, {
+      next: { revalidate: 60 },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error("Failed to fetch exercise data")
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Error:", error)
+    throw error
+  }
+}
+
+interface ExerciseDetailsProps {
+  params: Promise<{ id: string }> // zmiana tutaj — params jako Promise
+}
+
+const ExerciseDetails = ({ params }: ExerciseDetailsProps) => {
+  const { id } = use(params) // odpakowujemy parametry
   const router = useRouter()
   const [exercise, setExercise] = useState<Exercise | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchExercise = async () => {
+    const getExercise = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/exercises/${params.id}`)
+        setIsLoading(true)
+        setError(null)
 
-        if (!response.ok) {
-          throw new Error("Nie udało się pobrać danych ćwiczenia")
+        if (!id) {
+          setError("Invalid exercise ID")
+          return
         }
 
-        const data = await response.json()
+        const data = await fetchExercise(id)
+
+        if (!data) {
+          setError("Exercise not found")
+          return
+        }
+
         setExercise(data)
       } catch (error) {
-        console.error("Błąd:", error)
-        setError("Nie udało się załadować ćwiczenia. Spróbuj ponownie później.")
+        console.error("Error:", error)
+        setError("Failed to load exercise. Please try again later.")
       } finally {
         setIsLoading(false)
       }
     }
 
-    if (params.id) {
-      fetchExercise()
-    }
-  }, [params.id])
+    getExercise()
+  }, [id])
 
   if (isLoading) {
-    return <div className="container mx-auto py-10 text-center">Ładowanie danych ćwiczenia...</div>
-  }
-
-  if (error || !exercise) {
     return (
       <div className="container mx-auto py-10">
-        <div className="text-center text-red-500">{error || "Nie znaleziono ćwiczenia"}</div>
-        <div className="mt-4 text-center">
-          <Button onClick={() => router.push("/")}>Powrót do listy ćwiczeń</Button>
+        <div className="flex items-center justify-between mb-6">
+          <div className="h-10 w-32 bg-gray-200 animate-pulse rounded"></div>
+          <div className="h-10 w-40 bg-gray-200 animate-pulse rounded"></div>
+        </div>
+        <div className="rounded-md border p-6">
+          <div className="h-8 w-64 bg-gray-200 animate-pulse rounded mb-4"></div>
+          <div className="space-y-4">
+            <div className="h-4 w-full bg-gray-200 animate-pulse rounded"></div>
+            <div className="h-4 w-full bg-gray-200 animate-pulse rounded"></div>
+            <div className="h-4 w-3/4 bg-gray-200 animate-pulse rounded"></div>
+          </div>
         </div>
       </div>
     )
   }
 
+  if (error) {
+    return (
+      <div className="container mx-auto py-10">
+        <div className="rounded-md border p-6">
+          <p className="text-red-500">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!exercise) {
+    return <div>Exercise not found</div>
+  }
+
   return (
-    <div className="container mx-auto py-10">
+    <ContentLayout title={`Podlgąd ćwiczenia: ${exercise.name}`}>
+<div className="container mx-auto py-10">
       <div className="flex items-center justify-between mb-6">
         <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/")}>
           <ArrowLeft className="h-4 w-4" />
@@ -117,5 +166,8 @@ export default function ExerciseDetails() {
         </CardContent>
       </Card>
     </div>
+    </ContentLayout>
   )
 }
+
+export default ExerciseDetails
