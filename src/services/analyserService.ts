@@ -29,6 +29,23 @@ export interface CroppedVideo {
   crop_id: number;
 }
 
+export interface Exercise {
+  id: number;
+  name: string;
+  instructions: string | null;
+  enrichment: string | null;
+  videoUrl: string | null;
+  tags?: { id: number; name: string }[];
+}
+
+export interface ExerciseCreate {
+  name: string;
+  instructions: string;
+  enrichment: string;
+  videoUrl: string;
+  tag_ids: number[];
+}
+
 export interface AnalyserCreate {
   name: string;
   video_url: string;
@@ -107,6 +124,76 @@ export const createCroppedVideo = async (croppedVideo: CroppedVideoCreate): Prom
   return response.data;
 };
 
+// Funkcja do wycinania fragmentu wideo na serwerze
+export const cropVideo = async (annotationId: number, exerciseName?: string): Promise<CroppedVideo> => {
+  // Najpierw sprawdź, czy FFmpeg jest zainstalowany
+  try {
+    const ffmpegCheck = await checkFFmpeg();
+    console.log("FFmpeg check result:", ffmpegCheck);
+    
+    if (ffmpegCheck.status !== 'ok') {
+      throw new Error(`FFmpeg nie jest dostępny: ${ffmpegCheck.message}`);
+    }
+  } catch (error) {
+    console.error("Błąd podczas sprawdzania FFmpeg:", error);
+    // Kontynuuj mimo błędu sprawdzania, API może mieć własną logikę obsługi
+  }
+  
+  // Pobierz informacje o adnotacji, aby użyć jej tytułu jako nazwy ćwiczenia
+  const annotation = await axios.get(`${API_URL}/analysers/annotations/${annotationId}`);
+  const annotationData = annotation.data;
+  
+  // Utwórz ćwiczenie przed wycięciem wideo
+  const exerciseData: ExerciseCreate = {
+    name: exerciseName || annotationData.title || `Ćwiczenie z adnotacji ${annotationId}`,
+    instructions: annotationData.description || '',
+    enrichment: '',
+    videoUrl: '', // Zostanie zaktualizowane po wycięciu wideo
+    tag_ids: []
+  };
+  
+  console.log("Tworzenie ćwiczenia:", exerciseData);
+  const exercise = await createExercise(exerciseData);
+  console.log("Utworzono ćwiczenie:", exercise);
+  
+  // Teraz wytnij wideo i powiąż je z utworzonym ćwiczeniem
+  const response = await axios.post(
+    `${API_URL}/analysers/annotations/${annotationId}/crop-video`,
+    { exercise_id: exercise.id } // Przekaż ID utworzonego ćwiczenia
+  );
+  
+  // Zaktualizuj ćwiczenie z URL wideo
+  if (response.data && response.data.video_url) {
+    await axios.put(`${API_URL}/exercises/${exercise.id}`, {
+      ...exerciseData,
+      videoUrl: response.data.video_url
+    });
+  }
+  
+  return response.data;
+};
+
+// Funkcja do sprawdzania, czy FFmpeg jest zainstalowany
+export const checkFFmpeg = async (): Promise<{status: string, message: string}> => {
+  const response = await axios.get(`${API_URL}/analysers/check-ffmpeg`);
+  return response.data;
+};
+
+// Funkcja do sprawdzania, czy plik istnieje
+export const checkFile = async (filePath: string): Promise<{
+  status: string, 
+  message: string, 
+  path?: string, 
+  size?: number, 
+  modified?: number,
+  checked_paths?: string[]
+}> => {
+  const response = await axios.get(`${API_URL}/analysers/check-file`, {
+    params: { file_path: filePath }
+  });
+  return response.data;
+};
+
 export const getCroppedVideos = async (annotationId: number): Promise<CroppedVideo[]> => {
   const response = await axios.get(`${API_URL}/analysers/annotations/${annotationId}/cropped-videos`);
   return response.data;
@@ -124,4 +211,10 @@ export const uploadVideoFile = async (file: File): Promise<string> => {
   });
   
   return response.data.url;
+};
+
+// Funkcje API dla ćwiczeń
+export const createExercise = async (exercise: ExerciseCreate): Promise<Exercise> => {
+  const response = await axios.post(`${API_URL}/exercises`, exercise);
+  return response.data;
 };

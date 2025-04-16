@@ -25,6 +25,8 @@ import {
   Save,
   Scissors,
   ArrowLeft,
+  ChevronUp,
+  FastForward,
   StepForward,
   StepBack,
 } from "lucide-react"
@@ -34,7 +36,9 @@ import {
   getAnalyser, 
   getAnnotations, 
   createAnnotation, 
+  updateAnnotation, 
   deleteAnnotation,
+  createCroppedVideo,
   cropVideo,
   checkFFmpeg,
   checkFile
@@ -172,15 +176,13 @@ export default function AnalyserPage() {
           
           // Funkcja do wykrywania typowych wartości FPS
           function detectCommonFrameRate() {
-            if (!video) return;
-            
             // Sprawdź wysokość wideo - często pomaga w określeniu formatu
             const videoHeight = video.videoHeight;
             
             // Typowe wartości dla różnych formatów wideo
             if (videoHeight >= 1080) { // Full HD lub wyższe
               // Większość filmów Full HD to 24 lub 30 fps, materiały sportowe często 60 fps
-              if (video.duration && video.duration > 3600) { // Długie filmy często mają 24 fps
+              if (video.duration > 3600) { // Długie filmy często mają 24 fps
                 console.log("Detected likely film content (Full HD+, long duration), using 24 fps");
                 setFrameRate(24);
               } else {
@@ -723,9 +725,13 @@ export default function AnalyserPage() {
     }
     
     // Sprawdź format czasu
-    const timeFromParts = annotation.time_from.split(':');
+    const timeFromParts = typeof annotation.time_from === 'string' 
+      ? annotation.time_from.split(':') 
+      : [`${annotation.time_from.hour}`, `${annotation.time_from.minute}`, `${annotation.time_from.second}`];
     
-    const timeToParts = annotation.time_to ? annotation.time_to.split(':') : [];
+    const timeToParts = typeof annotation.time_to === 'string'
+      ? annotation.time_to.split(':')
+      : [`${annotation.time_to.hour}`, `${annotation.time_to.minute}`, `${annotation.time_to.second}`];
     
     if (timeFromParts.length !== 3 || timeToParts.length !== 3) {
       setError("Nieprawidłowy format czasu. Wymagany format: HH:MM:SS");
@@ -834,26 +840,25 @@ export default function AnalyserPage() {
       
       // Wyczyść błędy
       setError(null);
-    } catch (err: Error | unknown) {
+    } catch (err: any) {
       console.error("Błąd podczas wycinania fragmentu wideo:", err);
       
       // Spróbuj wyodrębnić szczegółowy komunikat błędu z odpowiedzi API
       let errorMessage = "Nie udało się wyciąć fragmentu wideo. Spróbuj ponownie później.";
       
-      if (err && typeof err === 'object' && 'response' in err) {
-        const errorWithResponse = err as { response: { status: number, data?: { detail?: string } } };
-        console.error("Odpowiedź serwera:", errorWithResponse.response);
+      if (err.response) {
+        console.error("Odpowiedź serwera:", err.response);
         
-        if (errorWithResponse.response.data) {
-          console.error("Dane odpowiedzi:", errorWithResponse.response.data);
+        if (err.response.data) {
+          console.error("Dane odpowiedzi:", err.response.data);
           
-          if (errorWithResponse.response.data.detail) {
-            errorMessage = `Błąd: ${errorWithResponse.response.data.detail}`;
+          if (err.response.data.detail) {
+            errorMessage = `Błąd: ${err.response.data.detail}`;
           }
         }
         
         // Dodaj kod statusu do komunikatu błędu
-        errorMessage += ` (Status: ${errorWithResponse.response.status})`;
+        errorMessage += ` (Status: ${err.response.status})`;
       }
       
       // Zmień status modalu na błąd
@@ -861,6 +866,7 @@ export default function AnalyserPage() {
       setCropModalMessage(errorMessage);
       setError(errorMessage);
     }
+  };
   };
   
   // Powrót do listy analizatorów
@@ -897,7 +903,7 @@ export default function AnalyserPage() {
 
   return (
     <ContentLayout title={`Podlgąd ćwiczenia: ${analyser?.name}`}>
-      <div className="p-6 bg-background">
+    <div className="p-6 bg-background">
       <div className="flex items-center gap-2 mb-6">
         <Button variant="ghost" size="icon" onClick={goBack}>
           <ArrowLeft className="h-5 w-5" />
@@ -980,7 +986,7 @@ export default function AnalyserPage() {
                 src={analyser.video_url}
               >
                 <p className="text-white text-center p-4">
-                  Your browser doesn&#39;t support HTML5 video. Here is a 
+                  Your browser doesn't support HTML5 video. Here is a 
                   <a href={analyser.video_url} className="text-blue-400 underline ml-1">
                     link to the video
                   </a> instead.
